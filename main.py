@@ -66,7 +66,7 @@ class WarehouseEnv:
             4: (0, 0)               # Stay
         }
 
-        # Calcolo posizioni proposte
+        # Calculate proposed positions
         prop_pos_1 = self._get_proposed_pos(self.agent_1_pos, moves[action_1])
         prop_pos_2 = self._get_proposed_pos(self.agent_2_pos, moves[action_2])
 
@@ -74,10 +74,11 @@ class WarehouseEnv:
         reward_2 = -0.1
 
         # --- OBSTACLE COLLISION LOGIC ---
-        # Se un agente sbatte contro un muro, resta dov'è e prende penalità
+        # If an agent hits a wall, it stays where it is and gets a penalty
+
         if prop_pos_1 in self.obstacles:
-            reward_1 -= 1.0  # Penalità urto
-            prop_pos_1 = self.agent_1_pos # Rimbalza
+            reward_1 -= 1.0  # Collision penalty
+            prop_pos_1 = self.agent_1_pos # Bounce back
         
         if prop_pos_2 in self.obstacles:
             reward_2 -= 1.0
@@ -93,7 +94,7 @@ class WarehouseEnv:
         if collision:
             reward_1 -= 10
             reward_2 -= 10
-            # In caso di scontro, non si muovono
+            # In case of collision, they don't move
             new_pos_1 = self.agent_1_pos
             new_pos_2 = self.agent_2_pos
         else:
@@ -104,13 +105,13 @@ class WarehouseEnv:
         self.agent_1_pos = new_pos_1
         self.agent_2_pos = new_pos_2
 
-        # Agente 1
+        # Agent 1
         if self.agent_1_pos == self.goal_1:
             if not self.agent_1_arrived:
-                reward_1 += 50      # Premio solo la prima volta!
+                reward_1 += 50      # Reward only the first time
                 self.agent_1_arrived = True
             else:
-                reward_1 += 0       # Se sei già lì, niente premio extra (o piccolo bonus 0.1 per star fermo)
+                reward_1 += 0       # If already there, no extra reward (or small bonus 0.1 for staying still)
         
         # Agente 2
         if self.agent_2_pos == self.goal_2:
@@ -120,7 +121,7 @@ class WarehouseEnv:
             else:
                 reward_2 += 0
 
-        # Episodio finisce se ENTRAMBE le bandierine sono True
+        # Episode ends if BOTH flags are True
         if self.agent_1_arrived and self.agent_2_arrived:
             self.done = True
 
@@ -167,13 +168,13 @@ class QLearningAgent:
         self.epsilon = max(EPSILON_MIN, self.epsilon * EPSILON_DECAY)
 
     def save_model(self, filename):
-        """Salva la Q-Table su file."""
+        """Save Q-Table on a file"""
         with open(filename, 'wb') as f:
             pickle.dump(self.q_table, f)
         print(f"💾 Model saved to {filename}")
 
     def load_model(self, filename):
-        """Carica la Q-Table da file."""
+        """Load Q-Table from a file"""
         if os.path.exists(filename):
             with open(filename, 'rb') as f:
                 self.q_table = pickle.load(f)
@@ -186,7 +187,7 @@ class QLearningAgent:
 # ==========================================
 
 def update_live_plot(ax, env, state, episode, step):
-    """Aggiorna il grafico in tempo reale durante il training."""
+    """Updates the plot in real-time during training."""
     ax.clear()
     ax.set_title(f"Training... Ep: {episode} | Step: {step}")
     
@@ -200,11 +201,11 @@ def update_live_plot(ax, env, state, episode, step):
         rect = patches.Rectangle((obs[1]-0.5, obs[0]-0.5), 1, 1, color='black')
         ax.add_patch(rect)
 
-    # Disegna Obiettivi
+    # Draw Goals
     ax.text(env.goal_1[1], env.goal_1[0], "G1", ha='center', va='center', color='blue', fontweight='bold')
     ax.text(env.goal_2[1], env.goal_2[0], "G2", ha='center', va='center', color='red', fontweight='bold')
 
-    # Disegna Agenti
+    # Draw Agents
     p1, p2 = state
     circle_1 = patches.Circle((p1[1], p1[0]), 0.3, color='blue', alpha=0.8)
     circle_2 = patches.Circle((p2[1], p2[0]), 0.3, color='red', alpha=0.8)
@@ -212,16 +213,17 @@ def update_live_plot(ax, env, state, episode, step):
     ax.add_patch(circle_2)
 
     plt.draw()
-    plt.pause(0.001) # Pausa minima per permettere a Matplotlib di aggiornare la finestra
+    plt.pause(0.001)
 
-def train(render_interval=1000): # Default: mostra 1 episodio ogni 1000
+def train(render_interval=1000):
+ # Default: show 1 episode every 1000
     env = WarehouseEnv()
     agent_1 = QLearningAgent()
     agent_2 = QLearningAgent()
     
-    # Preparazione grafico live
+    # Live plot preparation
     if render_interval > 0:
-        plt.ion()  # Attiva Interactive Mode
+        plt.ion()  # Turn on Interactive Mode
         fig, ax = plt.subplots(figsize=(6, 6))
     
     print("🤖 Training Started...")
@@ -231,7 +233,7 @@ def train(render_interval=1000): # Default: mostra 1 episodio ogni 1000
         state = env.reset()
         total_reward = 0
         
-        # Decidiamo se mostrare questo episodio
+        # Decide whether to show this episode
         show_this_episode = (render_interval > 0) and (episode % render_interval == 0)
 
         for step in range(MAX_STEPS):
@@ -242,7 +244,7 @@ def train(render_interval=1000): # Default: mostra 1 episodio ogni 1000
             agent_1.learn(state, action_1, rewards[0], next_state)
             agent_2.learn(state, action_2, rewards[1], next_state)
             
-            # --- VISUALIZZAZIONE LIVE ---
+            # --- LIVE VISUALIZATION ---
             if show_this_episode:
                 update_live_plot(ax, env, state, episode, step)
             # ----------------------------
@@ -259,7 +261,7 @@ def train(render_interval=1000): # Default: mostra 1 episodio ogni 1000
             print(f"Episode {episode}: Reward {total_reward:.1f} | Epsilon: {agent_1.epsilon:.3f}")
 
     if render_interval > 0:
-        plt.ioff() # Spegni modalità interattiva alla fine
+        plt.ioff() # Turn off interactive mode at the end
         plt.close()
 
     return agent_1, agent_2, rewards_history
@@ -331,7 +333,7 @@ def run_demo(agent_1, agent_2):
 
 def plot_learning(history):
     plt.figure(figsize=(10, 5))
-    # Media mobile ogni 500 episodi
+    # Moving average every 500 episodes
     window = 500
     if len(history) >= window:
         avg_rewards = np.convolve(history, np.ones(window)/window, mode='valid')
@@ -344,67 +346,55 @@ def plot_learning(history):
         print("📈 Learning curve saved.")
 
 if __name__ == "__main__":
-    # 1. Configurazione Argomenti da Terminale
     parser = argparse.ArgumentParser(description='Warehouse Multi-Agent RL')
     
-    # Argomento: Modalità (Train o Demo)
     parser.add_argument('--mode', type=str, default='train', choices=['train', 'demo'], 
                         help='Scegli "train" per addestrare o "demo" per vedere il risultato')
     
-    # Argomento: Live View (Flag booleano)
     parser.add_argument('--live', action='store_true', 
                         help='Se attivo, mostra il training in tempo reale ogni 500 episodi')
     
     args = parser.parse_args()
 
-    # Nomi dei file dove salvare i "cervelli" (Q-Tables)
     model_file_1 = os.path.join(OUTPUT_DIR, "agent_1_qtable.pkl")
     model_file_2 = os.path.join(OUTPUT_DIR, "agent_2_qtable.pkl")
 
-    # --- BLOCCO TRAINING ---
     if args.mode == 'train':
-        # Imposta intervallo di rendering: 500 se --live è attivo, altrimenti 0 (spento)
         render_interval = 500 if args.live else 0
         
         print(f"⚙️  Mode: TRAINING (Live View: {'ON' if args.live else 'OFF'})")
         if args.live:
             print("ℹ️  Premi Ctrl+C nel terminale se vuoi interrompere prima.")
 
-        # Avvia il training
         trained_a1, trained_a2, history = train(render_interval=render_interval)
 
-        # Salva i modelli
         print("\n💾 Saving models...")
         trained_a1.save_model(model_file_1)
         trained_a2.save_model(model_file_2)
         
-        # Salva il grafico dei reward
         plot_learning(history)
         print("✅ Training pipeline finished.")
 
-    # --- BLOCCO DEMO ---
     elif args.mode == 'demo':
         print(f"⚙️  Mode: DEMO")
         
-        # Verifica che i file esistano
         if not os.path.exists(model_file_1) or not os.path.exists(model_file_2):
             print("❌ Error: Model files not found! Run training first: python main.py --mode train")
             exit()
 
         print("🚀 Loading trained models...")
         
-        # Crea agenti vuoti e inietta la memoria (Q-Table)
+        # Create empty agents and inject memory (Q-Table)
         demo_agent_1 = QLearningAgent()
         demo_agent_2 = QLearningAgent()
         
         demo_agent_1.load_model(model_file_1)
         demo_agent_2.load_model(model_file_2)
         
-        # Imposta epsilon a 0 per la demo (solo sfruttamento, niente esplorazione)
+        # Set epsilon to 0 for demo (exploitation only, no exploration)
         demo_agent_1.epsilon = 0
         demo_agent_2.epsilon = 0
         
-        # Lancia la visualizzazione
         run_demo(demo_agent_1, demo_agent_2)
 
 
