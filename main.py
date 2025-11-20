@@ -10,14 +10,14 @@ import argparse
 # ==========================================
 # 1. CONFIGURATION & HYPERPARAMETERS
 # ==========================================
-GRID_SIZE = 10          # Aumentato a 10x10
-NUM_EPISODES = 10000    # Aumentato perché lo spazio degli stati è più grande
-MAX_STEPS = 250         # Aumentato per dare tempo di aggirare gli ostacoli
+GRID_SIZE = 10         
+NUM_EPISODES = 10000  
+MAX_STEPS = 150        
 LEARNING_RATE = 0.1
-DISCOUNT_FACTOR = 0.99  # Aumentato leggermente per valorizzare il lungo termine
+DISCOUNT_FACTOR = 0.99 
 EPSILON_START = 1.0
 EPSILON_MIN = 0.01
-EPSILON_DECAY = 0.9998  # Decay più lento per esplorare meglio la griglia grande
+EPSILON_DECAY = 0.9998 
 
 OUTPUT_DIR = "rl_output_v2"
 os.makedirs(OUTPUT_DIR, exist_ok=True)
@@ -37,15 +37,11 @@ class WarehouseEnv:
         self.start_2 = (9, 0)
         self.goal_2 = (0, 9)
 
-        # --- DEFINIZIONE OSTACOLI (Muri) ---
-        # Creiamo un muro centrale con un varco (bottleneck)
-        # Muro verticale sulla colonna 5, tranne che nelle righe 4 e 5
         self.obstacles = []
         for r in range(GRID_SIZE):
-            if r != 4 and r != 5: # Lascia un buco al centro
+            if r != 4 and r != 5: 
                 self.obstacles.append((r, 5))
         
-        # Aggiungiamo qualche blocco sparso per rendere il pathfinding interessante
         self.obstacles.extend([(2, 2), (7, 7), (2, 7), (7, 2)])
 
         self.reset()
@@ -54,7 +50,6 @@ class WarehouseEnv:
         self.agent_1_pos = self.start_1
         self.agent_2_pos = self.start_2
         
-        # AGGIUNGI QUESTO: Bandierine di completamento
         self.agent_1_arrived = False
         self.agent_2_arrived = False
         
@@ -109,7 +104,6 @@ class WarehouseEnv:
         self.agent_1_pos = new_pos_1
         self.agent_2_pos = new_pos_2
 
-# --- GOAL LOGIC (CORRETTA) ---
         # Agente 1
         if self.agent_1_pos == self.goal_1:
             if not self.agent_1_arrived:
@@ -142,7 +136,6 @@ class WarehouseEnv:
 # ==========================================
 class QLearningAgent:
     def __init__(self, action_space_size=5):
-        # AGGIUNGI QUESTO: Bandierine di completamento
         self.agent_1_arrived = False
         self.agent_2_arrived = False
         self.q_table = {} 
@@ -191,46 +184,84 @@ class QLearningAgent:
 # ==========================================
 # 4. TRAINING LOOP
 # ==========================================
-def train():
+
+def update_live_plot(ax, env, state, episode, step):
+    """Aggiorna il grafico in tempo reale durante il training."""
+    ax.clear()
+    ax.set_title(f"Training... Ep: {episode} | Step: {step}")
+    
+    # Disegna Griglia e Muri
+    ax.set_xlim(-0.5, env.grid_size - 0.5)
+    ax.set_ylim(-0.5, env.grid_size - 0.5)
+    ax.invert_yaxis()
+    ax.grid(True, color='gray', linestyle='-', linewidth=0.5)
+    
+    for obs in env.obstacles:
+        rect = patches.Rectangle((obs[1]-0.5, obs[0]-0.5), 1, 1, color='black')
+        ax.add_patch(rect)
+
+    # Disegna Obiettivi
+    ax.text(env.goal_1[1], env.goal_1[0], "G1", ha='center', va='center', color='blue', fontweight='bold')
+    ax.text(env.goal_2[1], env.goal_2[0], "G2", ha='center', va='center', color='red', fontweight='bold')
+
+    # Disegna Agenti
+    p1, p2 = state
+    circle_1 = patches.Circle((p1[1], p1[0]), 0.3, color='blue', alpha=0.8)
+    circle_2 = patches.Circle((p2[1], p2[0]), 0.3, color='red', alpha=0.8)
+    ax.add_patch(circle_1)
+    ax.add_patch(circle_2)
+
+    plt.draw()
+    plt.pause(0.001) # Pausa minima per permettere a Matplotlib di aggiornare la finestra
+
+def train(render_interval=1000): # Default: mostra 1 episodio ogni 1000
     env = WarehouseEnv()
     agent_1 = QLearningAgent()
     agent_2 = QLearningAgent()
-
-    print("🤖 Training Started... (High Complexity: ~1-2 minutes)")
     
-    # Per tracciare i progressi
+    # Preparazione grafico live
+    if render_interval > 0:
+        plt.ion()  # Attiva Interactive Mode
+        fig, ax = plt.subplots(figsize=(6, 6))
+    
+    print("🤖 Training Started...")
     rewards_history = []
 
     for episode in range(NUM_EPISODES):
         state = env.reset()
-        total_reward_1 = 0
-        total_reward_2 = 0
+        total_reward = 0
+        
+        # Decidiamo se mostrare questo episodio
+        show_this_episode = (render_interval > 0) and (episode % render_interval == 0)
 
         for step in range(MAX_STEPS):
             action_1 = agent_1.choose_action(state)
             action_2 = agent_2.choose_action(state)
-
             next_state, rewards, done = env.step(action_1, action_2)
-
+            
             agent_1.learn(state, action_1, rewards[0], next_state)
             agent_2.learn(state, action_2, rewards[1], next_state)
+            
+            # --- VISUALIZZAZIONE LIVE ---
+            if show_this_episode:
+                update_live_plot(ax, env, state, episode, step)
+            # ----------------------------
 
             state = next_state
-            total_reward_1 += rewards[0]
-            total_reward_2 += rewards[1]
-
-            if done:
-                break
+            total_reward += sum(rewards)
+            if done: break
 
         agent_1.decay_epsilon()
         agent_2.decay_epsilon()
-        
-        rewards_history.append(total_reward_1 + total_reward_2)
+        rewards_history.append(total_reward)
 
         if episode % 1000 == 0:
-            print(f"Episode {episode}: Tot Reward {total_reward_1+total_reward_2:.1f} | Epsilon: {agent_1.epsilon:.3f}")
+            print(f"Episode {episode}: Reward {total_reward:.1f} | Epsilon: {agent_1.epsilon:.3f}")
 
-    print("✅ Training Complete!")
+    if render_interval > 0:
+        plt.ioff() # Spegni modalità interattiva alla fine
+        plt.close()
+
     return agent_1, agent_2, rewards_history
 
 # ==========================================
@@ -313,47 +344,71 @@ def plot_learning(history):
         print("📈 Learning curve saved.")
 
 if __name__ == "__main__":
-    # Configurazione Argomenti da Terminale
-    parser = argparse.ArgumentParser(description='Warehouse RL Agent')
+    # 1. Configurazione Argomenti da Terminale
+    parser = argparse.ArgumentParser(description='Warehouse Multi-Agent RL')
+    
+    # Argomento: Modalità (Train o Demo)
     parser.add_argument('--mode', type=str, default='train', choices=['train', 'demo'], 
                         help='Scegli "train" per addestrare o "demo" per vedere il risultato')
     
+    # Argomento: Live View (Flag booleano)
+    parser.add_argument('--live', action='store_true', 
+                        help='Se attivo, mostra il training in tempo reale ogni 500 episodi')
+    
     args = parser.parse_args()
 
-    # Nomi dei file dove salvare i "cervelli"
+    # Nomi dei file dove salvare i "cervelli" (Q-Tables)
     model_file_1 = os.path.join(OUTPUT_DIR, "agent_1_qtable.pkl")
     model_file_2 = os.path.join(OUTPUT_DIR, "agent_2_qtable.pkl")
 
+    # --- BLOCCO TRAINING ---
     if args.mode == 'train':
-        # --- FASE DI TRAINING ---
-        # 1. Addestra
-        # Nota: Assicurati di aver corretto il bug del reward hacking prima di lanciare questo!
-        trained_a1, trained_a2, history = train() 
+        # Imposta intervallo di rendering: 500 se --live è attivo, altrimenti 0 (spento)
+        render_interval = 500 if args.live else 0
         
-        # 2. Salva i modelli
+        print(f"⚙️  Mode: TRAINING (Live View: {'ON' if args.live else 'OFF'})")
+        if args.live:
+            print("ℹ️  Premi Ctrl+C nel terminale se vuoi interrompere prima.")
+
+        # Avvia il training
+        trained_a1, trained_a2, history = train(render_interval=render_interval)
+
+        # Salva i modelli
+        print("\n💾 Saving models...")
         trained_a1.save_model(model_file_1)
         trained_a2.save_model(model_file_2)
         
-        # 3. Salva il grafico (opzionale se hai la funzione plot)
-        if 'plot_learning' in globals():
-            plot_learning(history)
+        # Salva il grafico dei reward
+        plot_learning(history)
+        print("✅ Training pipeline finished.")
 
+    # --- BLOCCO DEMO ---
     elif args.mode == 'demo':
-        # --- FASE DI DEMO ---
-        print("🚀 Loading models for Demo...")
+        print(f"⚙️  Mode: DEMO")
         
-        # 1. Crea agenti vuoti
+        # Verifica che i file esistano
+        if not os.path.exists(model_file_1) or not os.path.exists(model_file_2):
+            print("❌ Error: Model files not found! Run training first: python main.py --mode train")
+            exit()
+
+        print("🚀 Loading trained models...")
+        
+        # Crea agenti vuoti e inietta la memoria (Q-Table)
         demo_agent_1 = QLearningAgent()
         demo_agent_2 = QLearningAgent()
         
-        # 2. Carica la memoria dai file
         demo_agent_1.load_model(model_file_1)
         demo_agent_2.load_model(model_file_2)
         
-        # 3. Lancia la demo
+        # Imposta epsilon a 0 per la demo (solo sfruttamento, niente esplorazione)
+        demo_agent_1.epsilon = 0
+        demo_agent_2.epsilon = 0
+        
+        # Lancia la visualizzazione
         run_demo(demo_agent_1, demo_agent_2)
 
 
 
 # python main.py --mode train
+# python main.py --mode train --live
 # python main.py --mode demo
