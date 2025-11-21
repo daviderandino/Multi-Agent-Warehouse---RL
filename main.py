@@ -19,7 +19,7 @@ EPSILON_START = 1.0
 EPSILON_MIN = 0.01
 EPSILON_DECAY = 0.9998 
 
-OUTPUT_DIR = "rl_output_v2"
+OUTPUT_DIR = "rl_output_v1"
 os.makedirs(OUTPUT_DIR, exist_ok=True)
 
 # ==========================================
