@@ -21,6 +21,8 @@ This project serves as a proof-of-concept for decentralized autonomous robotic s
 
 Blue and Red agents navigating a bottleneck to reach their respective goals (G1, G2) without colliding.
 
+![Multi-Agent Navigation Demo](rl_deep_output/MARL.gif)
+
 ## 🛠️ Technical Architecture
 1. The Environment (Gymnasium)
 
